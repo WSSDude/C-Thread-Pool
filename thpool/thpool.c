@@ -8,19 +8,13 @@
  *
  ********************************/
 
-#define _POSIX_C_SOURCE 200809L
-#include <unistd.h>
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <pthread.h>
 #include <errno.h>
 #include <time.h>
-#if defined(__linux__)
-#include <sys/prctl.h>
-#endif
 
 #include "thpool.h"
+#include <tinycthread.h>
 
 #ifdef THPOOL_DEBUG
 #define THPOOL_DEBUG 1
@@ -44,8 +38,8 @@ static volatile int threads_on_hold;
 
 /* Binary semaphore */
 typedef struct bsem {
-	pthread_mutex_t mutex;
-	pthread_cond_t   cond;
+	mtx_t mutex;
+	cnd_t cond;
 	int v;
 } bsem;
 
@@ -60,7 +54,7 @@ typedef struct job{
 
 /* Job queue */
 typedef struct jobqueue{
-	pthread_mutex_t rwmutex;             /* used for queue r/w access */
+	mtx_t rwmutex;                       /* used for queue r/w access */
 	job  *front;                         /* pointer to front of queue */
 	job  *rear;                          /* pointer to rear  of queue */
 	bsem *has_jobs;                      /* flag as binary semaphore  */
@@ -70,20 +64,20 @@ typedef struct jobqueue{
 
 /* Thread */
 typedef struct thread{
-	int       id;                        /* friendly id               */
-	pthread_t pthread;                   /* pointer to actual thread  */
-	struct thpool_* thpool_p;            /* access to thpool          */
+	int    id;                        /* friendly id               */
+	thrd_t pthread;                   /* pointer to actual thread  */
+	struct thpool_* thpool_p;         /* access to thpool          */
 } thread;
 
 
 /* Threadpool */
 typedef struct thpool_{
-	thread**   threads;                  /* pointer to threads        */
-	volatile int num_threads_alive;      /* threads currently alive   */
-	volatile int num_threads_working;    /* threads currently working */
-	pthread_mutex_t  thcount_lock;       /* used for thread count etc */
-	pthread_cond_t  threads_all_idle;    /* signal to thpool_wait     */
-	jobqueue  jobqueue;                  /* job queue                 */
+	thread**       threads;             /* pointer to threads        */
+	volatile int   num_threads_alive;   /* threads currently alive   */
+	volatile int   num_threads_working; /* threads currently working */
+	mtx_t          thcount_lock;        /* used for thread count etc */
+	cnd_t          threads_all_idle;    /* signal to thpool_wait     */
+	jobqueue       jobqueue;            /* job queue                 */
 } thpool_;
 
 
@@ -95,7 +89,7 @@ typedef struct thpool_{
 
 static int  thread_init(thpool_* thpool_p, struct thread** thread_p, int id);
 static void* thread_do(struct thread* thread_p);
-static void  thread_hold(int sig_id);
+//static void  thread_hold(int sig_id); // TODO - currently unused, as this is tied to thpool_pause and thpool_resume, which are not yet implemented
 static void  thread_destroy(struct thread* thread_p);
 
 static int   jobqueue_init(jobqueue* jobqueue_p);
@@ -153,8 +147,8 @@ struct thpool_* thpool_init(int num_threads){
 		return NULL;
 	}
 
-	pthread_mutex_init(&(thpool_p->thcount_lock), NULL);
-	pthread_cond_init(&thpool_p->threads_all_idle, NULL);
+	mtx_init(&(thpool_p->thcount_lock), mtx_plain);
+	cnd_init(&thpool_p->threads_all_idle);
 
 	/* Thread init */
 	int n;
@@ -195,11 +189,11 @@ int thpool_add_work(thpool_* thpool_p, void (*function_p)(void*), void* arg_p){
 
 /* Wait until all jobs have finished */
 void thpool_wait(thpool_* thpool_p){
-	pthread_mutex_lock(&thpool_p->thcount_lock);
+	mtx_lock(&thpool_p->thcount_lock);
 	while (thpool_p->jobqueue.len || thpool_p->num_threads_working) {
-		pthread_cond_wait(&thpool_p->threads_all_idle, &thpool_p->thcount_lock);
+		cnd_wait(&thpool_p->threads_all_idle, &thpool_p->thcount_lock);
 	}
-	pthread_mutex_unlock(&thpool_p->thcount_lock);
+	mtx_unlock(&thpool_p->thcount_lock);
 }
 
 
@@ -227,7 +221,7 @@ void thpool_destroy(thpool_* thpool_p){
 	/* Poll remaining threads */
 	while (thpool_p->num_threads_alive){
 		bsem_post_all(thpool_p->jobqueue.has_jobs);
-		sleep(1);
+		thrd_sleep(&(struct timespec){.tv_sec=1}, NULL);
 	}
 
 	/* Job queue cleanup */
@@ -244,10 +238,11 @@ void thpool_destroy(thpool_* thpool_p){
 
 /* Pause all threads in threadpool */
 void thpool_pause(thpool_* thpool_p) {
-	int n;
-	for (n=0; n < thpool_p->num_threads_alive; n++){
-		pthread_kill(thpool_p->threads[n]->pthread, SIGUSR1);
-	}
+	// TODO - implement!
+  //int n;
+	//for (n=0; n < thpool_p->num_threads_alive; n++){
+	//	pthread_kill(thpool_p->threads[n]->pthread, SIGUSR1);
+	//}
 }
 
 
@@ -290,20 +285,20 @@ static int thread_init (thpool_* thpool_p, struct thread** thread_p, int id){
 	(*thread_p)->thpool_p = thpool_p;
 	(*thread_p)->id       = id;
 
-	pthread_create(&(*thread_p)->pthread, NULL, (void *)thread_do, (*thread_p));
-	pthread_detach((*thread_p)->pthread);
+	thrd_create(&(*thread_p)->pthread, (void *)thread_do, (*thread_p));
+  thrd_detach((*thread_p)->pthread);
 	return 0;
 }
 
-
-/* Sets the calling thread on hold */
-static void thread_hold(int sig_id) {
-    (void)sig_id;
-	threads_on_hold = 1;
-	while (threads_on_hold){
-		sleep(1);
-	}
-}
+// TODO - currently unused, as this is tied to thpool_pause and thpool_resume, which are not yet implemented
+///* Sets the calling thread on hold */
+//static void thread_hold(int sig_id) {
+//    (void)sig_id;
+//	threads_on_hold = 1;
+//	while (threads_on_hold){
+//    thrd_sleep(&(struct timespec){.tv_sec=1}, NULL);
+//	}
+//}
 
 
 /* What each thread is doing
@@ -332,19 +327,21 @@ static void* thread_do(struct thread* thread_p){
 	/* Assure all threads have been created before starting serving */
 	thpool_* thpool_p = thread_p->thpool_p;
 
-	/* Register signal handler */
-	struct sigaction act;
-	sigemptyset(&act.sa_mask);
-	act.sa_flags = 0;
-	act.sa_handler = thread_hold;
-	if (sigaction(SIGUSR1, &act, NULL) == -1) {
-		err("thread_do(): cannot handle SIGUSR1");
-	}
+	// TODO - implement along with thpool_pause and thpool_resume
+	// NOTE - this was not working before as intended anyway, seeing that you could pause all threads in a pool but not resume them afterwards
+  ///* Register signal handler */
+	//struct sigaction act;
+	//sigemptyset(&act.sa_mask);
+	//act.sa_flags = 0;
+	//act.sa_handler = thread_hold;
+	//if (sigaction(SIGUSR1, &act, NULL) == -1) {
+	//	err("thread_do(): cannot handle SIGUSR1");
+	//}
 
 	/* Mark thread as alive (initialized) */
-	pthread_mutex_lock(&thpool_p->thcount_lock);
+	mtx_lock(&thpool_p->thcount_lock);
 	thpool_p->num_threads_alive += 1;
-	pthread_mutex_unlock(&thpool_p->thcount_lock);
+	mtx_unlock(&thpool_p->thcount_lock);
 
 	while(threads_keepalive){
 
@@ -352,9 +349,9 @@ static void* thread_do(struct thread* thread_p){
 
 		if (threads_keepalive){
 
-			pthread_mutex_lock(&thpool_p->thcount_lock);
+      mtx_lock(&thpool_p->thcount_lock);
 			thpool_p->num_threads_working++;
-			pthread_mutex_unlock(&thpool_p->thcount_lock);
+      mtx_unlock(&thpool_p->thcount_lock);
 
 			/* Read job from queue and execute it */
 			void (*func_buff)(void*);
@@ -367,18 +364,18 @@ static void* thread_do(struct thread* thread_p){
 				free(job_p);
 			}
 
-			pthread_mutex_lock(&thpool_p->thcount_lock);
+      mtx_lock(&thpool_p->thcount_lock);
 			thpool_p->num_threads_working--;
 			if (!thpool_p->num_threads_working) {
-				pthread_cond_signal(&thpool_p->threads_all_idle);
+				cnd_signal(&thpool_p->threads_all_idle);
 			}
-			pthread_mutex_unlock(&thpool_p->thcount_lock);
+      mtx_unlock(&thpool_p->thcount_lock);
 
 		}
 	}
-	pthread_mutex_lock(&thpool_p->thcount_lock);
+  mtx_lock(&thpool_p->thcount_lock);
 	thpool_p->num_threads_alive --;
-	pthread_mutex_unlock(&thpool_p->thcount_lock);
+  mtx_unlock(&thpool_p->thcount_lock);
 
 	return NULL;
 }
@@ -407,7 +404,7 @@ static int jobqueue_init(jobqueue* jobqueue_p){
 		return -1;
 	}
 
-	pthread_mutex_init(&(jobqueue_p->rwmutex), NULL);
+	mtx_init(&(jobqueue_p->rwmutex), mtx_plain);
 	bsem_init(jobqueue_p->has_jobs, 0);
 
 	return 0;
@@ -433,7 +430,7 @@ static void jobqueue_clear(jobqueue* jobqueue_p){
  */
 static void jobqueue_push(jobqueue* jobqueue_p, struct job* newjob){
 
-	pthread_mutex_lock(&jobqueue_p->rwmutex);
+	mtx_lock(&jobqueue_p->rwmutex);
 	newjob->prev = NULL;
 
 	switch(jobqueue_p->len){
@@ -451,20 +448,17 @@ static void jobqueue_push(jobqueue* jobqueue_p, struct job* newjob){
 	jobqueue_p->len++;
 
 	bsem_post(jobqueue_p->has_jobs);
-	pthread_mutex_unlock(&jobqueue_p->rwmutex);
+	mtx_unlock(&jobqueue_p->rwmutex);
 }
 
 
 /* Get first job from queue(removes it from queue)
-<<<<<<< HEAD
  *
  * Notice: Caller MUST hold a mutex
-=======
->>>>>>> da2c0fe45e43ce0937f272c8cd2704bdc0afb490
  */
 static struct job* jobqueue_pull(jobqueue* jobqueue_p){
 
-	pthread_mutex_lock(&jobqueue_p->rwmutex);
+	mtx_lock(&jobqueue_p->rwmutex);
 	job* job_p = jobqueue_p->front;
 
 	switch(jobqueue_p->len){
@@ -486,7 +480,7 @@ static struct job* jobqueue_pull(jobqueue* jobqueue_p){
 
 	}
 
-	pthread_mutex_unlock(&jobqueue_p->rwmutex);
+	mtx_unlock(&jobqueue_p->rwmutex);
 	return job_p;
 }
 
@@ -510,8 +504,8 @@ static void bsem_init(bsem *bsem_p, int value) {
 		err("bsem_init(): Binary semaphore can take only values 1 or 0");
 		exit(1);
 	}
-	pthread_mutex_init(&(bsem_p->mutex), NULL);
-	pthread_cond_init(&(bsem_p->cond), NULL);
+	mtx_init(&(bsem_p->mutex), mtx_plain);
+	cnd_init(&(bsem_p->cond));
 	bsem_p->v = value;
 }
 
@@ -524,28 +518,28 @@ static void bsem_reset(bsem *bsem_p) {
 
 /* Post to at least one thread */
 static void bsem_post(bsem *bsem_p) {
-	pthread_mutex_lock(&bsem_p->mutex);
+	mtx_lock(&bsem_p->mutex);
 	bsem_p->v = 1;
-	pthread_cond_signal(&bsem_p->cond);
-	pthread_mutex_unlock(&bsem_p->mutex);
+	cnd_signal(&bsem_p->cond);
+	mtx_unlock(&bsem_p->mutex);
 }
 
 
 /* Post to all threads */
 static void bsem_post_all(bsem *bsem_p) {
-	pthread_mutex_lock(&bsem_p->mutex);
+	mtx_lock(&bsem_p->mutex);
 	bsem_p->v = 1;
-	pthread_cond_broadcast(&bsem_p->cond);
-	pthread_mutex_unlock(&bsem_p->mutex);
+	cnd_broadcast(&bsem_p->cond);
+	mtx_unlock(&bsem_p->mutex);
 }
 
 
 /* Wait on semaphore until semaphore has value 0 */
 static void bsem_wait(bsem* bsem_p) {
-	pthread_mutex_lock(&bsem_p->mutex);
+	mtx_lock(&bsem_p->mutex);
 	while (bsem_p->v != 1) {
-		pthread_cond_wait(&bsem_p->cond, &bsem_p->mutex);
+		cnd_wait(&bsem_p->cond, &bsem_p->mutex);
 	}
 	bsem_p->v = 0;
-	pthread_mutex_unlock(&bsem_p->mutex);
+	mtx_unlock(&bsem_p->mutex);
 }
