@@ -89,7 +89,6 @@ typedef struct thpool_{
 
 static int  thread_init(thpool_* thpool_p, struct thread** thread_p, int id);
 static void* thread_do(struct thread* thread_p);
-//static void  thread_hold(int sig_id); // TODO - currently unused, as this is tied to thpool_pause and thpool_resume, which are not yet implemented
 static void  thread_destroy(struct thread* thread_p);
 
 static int   jobqueue_init(jobqueue* jobqueue_p);
@@ -236,27 +235,6 @@ void thpool_destroy(thpool_* thpool_p){
 }
 
 
-/* Pause all threads in threadpool */
-void thpool_pause(thpool_* thpool_p) {
-	// TODO - implement!
-  //int n;
-	//for (n=0; n < thpool_p->num_threads_alive; n++){
-	//	pthread_kill(thpool_p->threads[n]->pthread, SIGUSR1);
-	//}
-}
-
-
-/* Resume all threads in threadpool */
-void thpool_resume(thpool_* thpool_p) {
-    // resuming a single threadpool hasn't been
-    // implemented yet, meanwhile this supresses
-    // the warnings
-    (void)thpool_p;
-
-	threads_on_hold = 0;
-}
-
-
 int thpool_num_threads_working(thpool_* thpool_p){
 	return thpool_p->num_threads_working;
 }
@@ -290,16 +268,6 @@ static int thread_init (thpool_* thpool_p, struct thread** thread_p, int id){
 	return 0;
 }
 
-// TODO - currently unused, as this is tied to thpool_pause and thpool_resume, which are not yet implemented
-///* Sets the calling thread on hold */
-//static void thread_hold(int sig_id) {
-//    (void)sig_id;
-//	threads_on_hold = 1;
-//	while (threads_on_hold){
-//    thrd_sleep(&(struct timespec){.tv_sec=1}, NULL);
-//	}
-//}
-
 
 /* What each thread is doing
 *
@@ -326,17 +294,6 @@ static void* thread_do(struct thread* thread_p){
 
 	/* Assure all threads have been created before starting serving */
 	thpool_* thpool_p = thread_p->thpool_p;
-
-	// TODO - implement along with thpool_pause and thpool_resume
-	// NOTE - this was not working before as intended anyway, seeing that you could pause all threads in a pool but not resume them afterwards
-  ///* Register signal handler */
-	//struct sigaction act;
-	//sigemptyset(&act.sa_mask);
-	//act.sa_flags = 0;
-	//act.sa_handler = thread_hold;
-	//if (sigaction(SIGUSR1, &act, NULL) == -1) {
-	//	err("thread_do(): cannot handle SIGUSR1");
-	//}
 
 	/* Mark thread as alive (initialized) */
 	mtx_lock(&thpool_p->thcount_lock);
