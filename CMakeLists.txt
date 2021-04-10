@@ -13,6 +13,6 @@ option(TINYCTHREAD_DISABLE_TESTS "Disable TinyCThread unit tests" ON)
 option(TINYCTHREAD_INSTALL "Install a static library for TinyCThread" OFF)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../tinycthread ${CMAKE_CURRENT_BINARY_DIR}/tinycthread)
 
-add_library(thpool STATIC thpool/thpool.c)
+add_library(thpool STATIC thpool.c)
 target_include_directories(thpool PUBLIC thpool)
 target_link_libraries(thpool PUBLIC tinycthread)
