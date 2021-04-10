@@ -1,4 +1,4 @@
-![Build status](http://178.62.170.124:3000/pithikos/c-thread-pool/badge/?branch=master)
+[![CircleCI](https://circleci.com/gh/Pithikos/C-Thread-Pool.svg?style=svg)](https://circleci.com/gh/Pithikos/C-Thread-Pool)
 
 # C Thread Pool
 
@@ -65,3 +65,5 @@ You are very welcome to contribute. If you have a new feature in mind, you can a
 * For coding style simply try to stick to the conventions you find in the existing codebase.
 * Tests: A new fix or feature should be covered by tests. If the existing tests are not sufficient, we expect an according test to follow with the pull request.
 * Documentation: for a new feature please add documentation. For an API change the documentation has to be thorough and super easy to understand.
+
+If you wish to **get access as a collaborator** feel free to mention it in the issue https://github.com/Pithikos/C-Thread-Pool/issues/78

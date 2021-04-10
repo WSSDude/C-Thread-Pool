@@ -263,8 +263,8 @@ static int thread_init (thpool_* thpool_p, struct thread** thread_p, int id){
 	(*thread_p)->thpool_p = thpool_p;
 	(*thread_p)->id       = id;
 
-	thrd_create(&(*thread_p)->pthread, (void *)thread_do, (*thread_p));
-  thrd_detach((*thread_p)->pthread);
+	thrd_create(&(*thread_p)->pthread, (void * (*)(void *))thread_do, (*thread_p));
+    thrd_detach((*thread_p)->pthread);
 	return 0;
 }
 
@@ -280,8 +280,8 @@ static int thread_init (thpool_* thpool_p, struct thread** thread_p, int id){
 static void* thread_do(struct thread* thread_p){
 
 	/* Set thread name for profiling and debuging */
-	char thread_name[128] = {0};
-	sprintf(thread_name, "thread-pool-%d", thread_p->id);
+	char thread_name[32] = {0};
+	snprintf(thread_name, 32, "thread-pool-%d", thread_p->id);
 
 #if defined(__linux__)
 	/* Use prctl instead to prevent using _GNU_SOURCE flag and implicit declaration */
