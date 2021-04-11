@@ -263,8 +263,8 @@ static int thread_init (thpool_* thpool_p, struct thread** thread_p, int id){
 	(*thread_p)->thpool_p = thpool_p;
 	(*thread_p)->id       = id;
 
-	thrd_create(&(*thread_p)->pthread, (void * (*)(void *))thread_do, (*thread_p));
-    thrd_detach((*thread_p)->pthread);
+	thrd_create(&(*thread_p)->pthread, (int(*)(void *))thread_do, (*thread_p));
+	thrd_detach((*thread_p)->pthread);
 	return 0;
 }
 
