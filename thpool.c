@@ -87,8 +87,8 @@ typedef struct thpool_{
 /* ========================== PROTOTYPES ============================ */
 
 
-static int  thread_init(thpool_* thpool_p, struct thread** thread_p, int id);
-static void* thread_do(struct thread* thread_p);
+static int   thread_init(thpool_* thpool_p, struct thread** thread_p, int id);
+static int   thread_do(struct thread* thread_p);
 static void  thread_destroy(struct thread* thread_p);
 
 static int   jobqueue_init(jobqueue* jobqueue_p);
@@ -277,7 +277,7 @@ static int thread_init (thpool_* thpool_p, struct thread** thread_p, int id){
 * @param  thread        thread that will run this function
 * @return nothing
 */
-static void* thread_do(struct thread* thread_p){
+static int thread_do(struct thread* thread_p){
 
 	/* Set thread name for profiling and debuging */
 	char thread_name[32] = {0};
@@ -334,7 +334,7 @@ static void* thread_do(struct thread* thread_p){
 	thpool_p->num_threads_alive --;
   mtx_unlock(&thpool_p->thcount_lock);
 
-	return NULL;
+	return 0;
 }
 
 
