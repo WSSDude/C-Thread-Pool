@@ -16,6 +16,10 @@
 #include "thpool.h"
 #include <tinycthread.h>
 
+#ifdef __linux__
+#include <sys/prctl.h>
+#endif
+
 #ifdef THPOOL_DEBUG
 #define THPOOL_DEBUG 1
 #else
